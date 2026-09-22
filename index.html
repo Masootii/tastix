@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="fa">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task Matrix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&family=Noto+Serif+JP:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void:#05080a;
+    --bg-surface:#0b1512;
+    --bg-elevated:#101d18;
+    --border-dim:#1b3229;
+    --border-faint:#13241d;
+    --matrix:#3dffa0;
+    --matrix-dim:#1c8f5c;
+    --violet:#b79bff;
+    --violet-dim:#6a52b0;
+    --crimson:#ff4568;
+    --crimson-dim:#9c2340;
+    --text-primary:#dfffec;
+    --text-muted:#7fa694;
+    --text-faint:#456156;
+  }
+
+  *{box-sizing:border-box;}
+
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg-void);
+    color:var(--text-primary);
+    font-family:'Rajdhani','Tahoma',sans-serif;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  canvas#rain{
+    position:fixed;
+    inset:0;
+    width:100%;
+    height:100%;
+    z-index:0;
+    opacity:.22;
+    pointer-events:none;
+  }
+
+  .wrap{
+    position:relative;
+    z-index:1;
+    display:flex;
+    flex-direction:column;
+    min-height:100%;
+    padding:20px clamp(16px,4vw,40px) 32px;
+    gap:22px;
+  }
+
+  header{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:14px;
+    border-bottom:1px solid var(--border-dim);
+    padding-bottom:16px;
+  }
+  .brand h1{
+    margin:0;
+    font-family:'Share Tech Mono',monospace;
+    font-size:clamp(24px,4vw,34px);
+    letter-spacing:.14em;
+    color:var(--matrix);
+    text-shadow:0 0 6px rgba(61,255,160,.55),0 0 22px rgba(61,255,160,.25);
+    animation:flicker 6s infinite steps(30);
+  }
+  @media (prefers-reduced-motion: reduce){
+    .brand h1{animation:none;}
+  }
+  @keyframes flicker{
+    0%,4%,6%,8%,88%,92%,100%{opacity:1;}
+    5%,7%,90%{opacity:.72;}
+  }
+  .brand p{
+    margin:4px 0 0;
+    font-size:14px;
+    color:var(--text-muted);
+    letter-spacing:.02em;
+  }
+  .tally{
+    display:flex;
+    gap:10px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px;
+  }
+  .tally span{
+    border:1px solid var(--border-dim);
+    background:var(--bg-surface);
+    padding:6px 12px;
+    border-radius:2px;
+    color:var(--text-muted);
+    white-space:nowrap;
+  }
+  .tally b{color:var(--matrix);font-weight:400;}
+
+  main{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:18px;
+    flex:1;
+    min-height:0;
+  }
+  @media (max-width:760px){
+    main{grid-template-columns:1fr;}
+  }
+
+  .col{
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    background:linear-gradient(180deg,var(--bg-surface),var(--bg-void));
+    border:1px solid var(--border-dim);
+    border-radius:4px;
+    overflow:hidden;
+    position:relative;
+  }
+  .col[data-status="planned"]{--accent:var(--matrix);--accent-dim:var(--matrix-dim);}
+  .col[data-status="doing"]{--accent:var(--violet);--accent-dim:var(--violet-dim);}
+  .col[data-status="done"]{--accent:var(--crimson);--accent-dim:var(--crimson-dim);}
+  .col{border-top:2px solid var(--accent-dim);}
+  .col.drag-over{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),0 0 18px -4px var(--accent);}
+
+  .col-head{
+    padding:14px 16px 10px;
+    position:relative;
+    overflow:hidden;
+    flex-shrink:0;
+  }
+  .col-head .kanji{
+    position:absolute;
+    top:-14px;
+    right:4px;
+    font-family:'Noto Serif JP',serif;
+    font-size:72px;
+    color:var(--accent);
+    opacity:.07;
+    line-height:1;
+    pointer-events:none;
+  }
+  .col-head h2{
+    margin:0;
+    font-size:18px;
+    font-weight:600;
+    color:var(--text-primary);
+    position:relative;
+  }
+  .col-head .sub{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:4px;
+    position:relative;
+  }
+  .col-head .sub span.tag{
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px;
+    letter-spacing:.12em;
+    color:var(--accent);
+  }
+  .col-head .sub span.count{
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px;
+    color:var(--text-faint);
+    border:1px solid var(--border-faint);
+    border-radius:10px;
+    padding:1px 8px;
+  }
+  .col[data-status="doing"] .col-head{
+    animation:pulse 3.2s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{box-shadow:inset 0 -24px 24px -24px rgba(183,155,255,0);}
+    50%{box-shadow:inset 0 -24px 24px -24px rgba(183,155,255,.35);}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .col[data-status="doing"] .col-head{animation:none;}
+  }
+
+  .col-body{
+    flex:1;
+    min-height:80px;
+    overflow-y:auto;
+    padding:4px 12px 12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .col-body::-webkit-scrollbar{width:8px;}
+  .col-body::-webkit-scrollbar-track{background:transparent;}
+  .col-body::-webkit-scrollbar-thumb{background:var(--border-dim);border-radius:4px;}
+
+  .col-body:empty::after{
+    content:"—";
+    color:var(--text-faint);
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px;
+    text-align:center;
+    padding:10px 0;
+  }
+
+  .card{
+    background:var(--bg-elevated);
+    border:1px solid var(--border-dim);
+    border-inline-start:3px solid var(--accent);
+    clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px));
+    padding:10px 30px 10px 12px;
+    position:relative;
+    cursor:grab;
+    transition:box-shadow .15s,transform .15s,opacity .15s;
+  }
+  .card:hover{box-shadow:0 0 0 1px var(--accent-dim),0 6px 18px -8px rgba(0,0,0,.6);}
+  .card.dragging{opacity:.35;}
+  .card p{
+    margin:0;
+    font-size:15px;
+    line-height:1.45;
+    color:var(--text-primary);
+    word-break:break-word;
+  }
+  .card .del{
+    position:absolute;
+    top:6px;
+    right:8px;
+    width:20px;
+    height:20px;
+    border:none;
+    background:transparent;
+    color:var(--text-faint);
+    font-family:'Share Tech Mono',monospace;
+    font-size:14px;
+    line-height:1;
+    cursor:pointer;
+    border-radius:3px;
+    opacity:0;
+    transition:opacity .15s,color .15s,background .15s;
+  }
+  .card:hover .del,.card .del:focus-visible{opacity:1;}
+  .card .del:hover{color:var(--crimson);background:rgba(255,69,104,.12);}
+
+  .add-row{
+    flex-shrink:0;
+    border-top:1px solid var(--border-faint);
+    padding:10px 12px 14px;
+  }
+  .add-toggle{
+    width:100%;
+    background:transparent;
+    border:1px dashed var(--border-dim);
+    color:var(--text-muted);
+    font-family:'Rajdhani',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    padding:8px;
+    border-radius:3px;
+    cursor:pointer;
+    transition:border-color .15s,color .15s;
+  }
+  .add-toggle:hover,.add-toggle:focus-visible{border-color:var(--accent);color:var(--accent);}
+
+  .add-form{display:none;gap:6px;}
+  .add-form.open{display:flex;}
+  .add-form input{
+    flex:1;
+    background:var(--bg-void);
+    border:1px solid var(--border-dim);
+    color:var(--text-primary);
+    font-family:'Rajdhani',sans-serif;
+    font-size:14px;
+    padding:8px 10px;
+    border-radius:3px;
+    min-width:0;
+  }
+  .add-form input:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .add-form button{
+    background:var(--accent-dim);
+    border:none;
+    color:#04140b;
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px;
+    padding:0 12px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .add-form button:hover{filter:brightness(1.25);}
+
+  footer{
+    text-align:center;
+    color:var(--text-faint);
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px;
+    letter-spacing:.06em;
+  }
+
+  :focus-visible{outline:2px solid var(--matrix);outline-offset:2px;}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <canvas id="rain" aria-hidden="true"></canvas>
+
+  <header>
+    <div class="brand">
+      <h1>TASK :: MATRIX</h1>
+      <p dir="auto">بورد وظایف — بکش، رها کن، پیش برو.</p>
+    </div>
+    <div class="tally" id="tally"></div>
+  </header>
+
+  <main>
+    <section class="col" data-status="planned">
+      <div class="col-head">
+        <span class="kanji">計</span>
+        <h2 dir="auto">برنامه‌ریزی‌شده</h2>
+        <div class="sub"><span class="tag">PLANNED</span><span class="count" id="count-planned">0</span></div>
+      </div>
+      <div class="col-body" id="body-planned" data-status="planned"></div>
+      <div class="add-row">
+        <button class="add-toggle" data-target="planned" type="button">+ افزودن تسک</button>
+        <form class="add-form" data-status="planned">
+          <input dir="auto" type="text" maxlength="140" placeholder="متن تسک…" aria-label="متن تسک جدید">
+          <button type="submit">ثبت</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="col" data-status="doing">
+      <div class="col-head">
+        <span class="kanji">動</span>
+        <h2 dir="auto">در حال انجام</h2>
+        <div class="sub"><span class="tag">DOING</span><span class="count" id="count-doing">0</span></div>
+      </div>
+      <div class="col-body" id="body-doing" data-status="doing"></div>
+      <div class="add-row">
+        <button class="add-toggle" data-target="doing" type="button">+ افزودن تسک</button>
+        <form class="add-form" data-status="doing">
+          <input dir="auto" type="text" maxlength="140" placeholder="متن تسک…" aria-label="متن تسک جدید">
+          <button type="submit">ثبت</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="col" data-status="done">
+      <div class="col-head">
+        <span class="kanji">了</span>
+        <h2 dir="auto">انجام‌شده</h2>
+        <div class="sub"><span class="tag">DONE</span><span class="count" id="count-done">0</span></div>
+      </div>
+      <div class="col-body" id="body-done" data-status="done"></div>
+      <div class="add-row">
+        <button class="add-toggle" data-target="done" type="button">+ افزودن تسک</button>
+        <form class="add-form" data-status="done">
+          <input dir="auto" type="text" maxlength="140" placeholder="متن تسک…" aria-label="متن تسک جدید">
+          <button type="submit">ثبت</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <footer>SIGNAL STABLE — BOARD SYNCED LOCALLY</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var STORAGE_KEY = 'task-matrix-state';
+  var STATUSES = ['planned','doing','done'];
+
+  var SEED = {tasks:[
+    {id:"t1",text:"طراحی تم دارک نئون",status:"planned"},
+    {id:"t2",text:"افزودن جلوه صوتی محیط (اختیاری)",status:"planned"},
+    {id:"t3",text:"پیاده‌سازی درگ‌اند‌دراپ بین ستون‌ها",status:"doing"},
+    {id:"t4",text:"راه‌اندازی ساختار پایه صفحه",status:"done"},
+    {id:"t5",text:"اتصال ذخیره‌سازی به localStorage",status:"done"}
+  ]};
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return JSON.parse(JSON.stringify(SEED));
+  }
+
+  var state = loadState();
+
+  function uid(){
+    return 't_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
+  }
+
+  function render(){
+    STATUSES.forEach(function(status){
+      var body = document.getElementById('body-' + status);
+      body.innerHTML = '';
+      var items = state.tasks.filter(function(t){return t.status===status;});
+      items.forEach(function(task){
+        body.appendChild(buildCard(task));
+      });
+      document.getElementById('count-' + status).textContent = items.length;
+    });
+    var tally = document.getElementById('tally');
+    tally.innerHTML = '';
+    var total = state.tasks.length;
+    var span = document.createElement('span');
+    span.innerHTML = '<b>' + total + '</b> وظیفه کل';
+    tally.appendChild(span);
+  }
+
+  function buildCard(task){
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.draggable = true;
+    card.dataset.id = task.id;
+
+    var p = document.createElement('p');
+    p.dir = 'auto';
+    p.textContent = task.text;
+    card.appendChild(p);
+
+    var del = document.createElement('button');
+    del.className = 'del';
+    del.type = 'button';
+    del.setAttribute('aria-label','حذف تسک');
+    del.textContent = '×';
+    del.addEventListener('click', function(e){
+      e.stopPropagation();
+      removeTask(task.id);
+    });
+    card.appendChild(del);
+
+    card.addEventListener('dragstart', function(e){
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', task.id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', function(){
+      card.classList.remove('dragging');
+      syncOrderFromDOM();
+    });
+
+    return card;
+  }
+
+  function getDragAfterElement(container, y){
+    var cards = Array.prototype.slice.call(container.querySelectorAll('.card:not(.dragging)'));
+    var closest = {offset: -Infinity, element: null};
+    cards.forEach(function(card){
+      var box = card.getBoundingClientRect();
+      var offset = y - box.top - box.height/2;
+      if(offset < 0 && offset > closest.offset){
+        closest = {offset: offset, element: card};
+      }
+    });
+    return closest.element;
+  }
+
+  function wireColumns(){
+    document.querySelectorAll('.col-body').forEach(function(body){
+      body.addEventListener('dragover', function(e){
+        e.preventDefault();
+        var col = body.closest('.col');
+        col.classList.add('drag-over');
+        var dragging = document.querySelector('.card.dragging');
+        if(!dragging) return;
+        var after = getDragAfterElement(body, e.clientY);
+        if(after == null){
+          body.appendChild(dragging);
+        } else {
+          body.insertBefore(dragging, after);
+        }
+      });
+      body.addEventListener('dragleave', function(e){
+        if(e.target === body) body.closest('.col').classList.remove('drag-over');
+      });
+      body.addEventListener('drop', function(e){
+        e.preventDefault();
+        body.closest('.col').classList.remove('drag-over');
+      });
+    });
+    document.querySelectorAll('.col').forEach(function(col){
+      col.addEventListener('dragleave', function(e){
+        if(!col.contains(e.relatedTarget)) col.classList.remove('drag-over');
+      });
+    });
+  }
+
+  function syncOrderFromDOM(){
+    document.querySelectorAll('.col').forEach(function(c){c.classList.remove('drag-over');});
+    var next = [];
+    STATUSES.forEach(function(status){
+      var body = document.getElementById('body-' + status);
+      Array.prototype.slice.call(body.querySelectorAll('.card')).forEach(function(cardEl){
+        var task = state.tasks.find(function(t){return t.id === cardEl.dataset.id;});
+        if(task){
+          task.status = status;
+          next.push(task);
+        }
+      });
+    });
+    if(next.length === state.tasks.length){
+      state.tasks = next;
+    }
+    render();
+    persist();
+  }
+
+  function removeTask(id){
+    var cardEl = document.querySelector('.card[data-id="' + id + '"]');
+    if(cardEl){
+      cardEl.style.opacity = '0';
+      cardEl.style.transform = 'scale(.92)';
+    }
+    setTimeout(function(){
+      state.tasks = state.tasks.filter(function(t){return t.id !== id;});
+      render();
+      persist();
+    }, 120);
+  }
+
+  function addTask(status, text){
+    text = text.trim();
+    if(!text) return;
+    state.tasks.push({id: uid(), text: text, status: status});
+    render();
+    persist();
+  }
+
+  function wireAddForms(){
+    document.querySelectorAll('.add-toggle').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var status = btn.dataset.target;
+        var form = document.querySelector('.add-form[data-status="' + status + '"]');
+        var open = form.classList.toggle('open');
+        btn.style.display = open ? 'none' : 'block';
+        if(open) form.querySelector('input').focus();
+      });
+    });
+    document.querySelectorAll('.add-form').forEach(function(form){
+      form.addEventListener('submit', function(e){
+        e.preventDefault();
+        var input = form.querySelector('input');
+        addTask(form.dataset.status, input.value);
+        input.value = '';
+        form.classList.remove('open');
+        document.querySelector('.add-toggle[data-target="' + form.dataset.status + '"]').style.display = 'block';
+      });
+      form.querySelector('input').addEventListener('keydown', function(e){
+        if(e.key === 'Escape'){
+          form.classList.remove('open');
+          document.querySelector('.add-toggle[data-target="' + form.dataset.status + '"]').style.display = 'block';
+        }
+      });
+    });
+  }
+
+  function persist(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }catch(e){}
+  }
+
+  function initRain(){
+    var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var canvas = document.getElementById('rain');
+    var ctx = canvas.getContext('2d');
+    var chars = 'アイウエオカキクケコサシスセソタチツテト0123456789';
+    var fontSize = 15;
+    var columns, drops;
+
+    function resize(){
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      columns = Math.floor(canvas.width / fontSize);
+      drops = new Array(columns).fill(0).map(function(){return Math.random()*-40;});
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    if(reduceMotion){
+      ctx.fillStyle = 'rgba(5,8,10,1)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      return;
+    }
+
+    function frame(){
+      ctx.fillStyle = 'rgba(5,8,10,.13)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#3dffa0';
+      ctx.font = fontSize + 'px monospace';
+      for(var i=0;i<drops.length;i++){
+        var ch = chars[Math.floor(Math.random()*chars.length)];
+        ctx.fillText(ch, i*fontSize, drops[i]*fontSize);
+        if(drops[i]*fontSize > canvas.height && Math.random() > .975){
+          drops[i] = 0;
+        }
+        drops[i]++;
+      }
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  render();
+  wireColumns();
+  wireAddForms();
+  initRain();
+})();
+</script>
+</body>
+</html>
