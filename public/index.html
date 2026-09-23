@@ -388,6 +388,70 @@
   }
 
   :focus-visible{outline:2px solid var(--matrix);outline-offset:2px;}
+
+  #auth-gate{
+    position:fixed;
+    inset:0;
+    z-index:50;
+    background:rgba(5,8,10,.92);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    backdrop-filter:blur(4px);
+  }
+  #auth-gate[hidden]{display:none;}
+  .auth-box{
+    border:1px solid var(--border-dim);
+    background:linear-gradient(180deg,var(--bg-surface),var(--bg-void));
+    border-radius:6px;
+    padding:28px 30px;
+    width:min(320px,88vw);
+    text-align:center;
+    box-shadow:0 0 30px -6px rgba(61,255,160,.25);
+  }
+  .auth-box p{
+    margin:0 0 16px;
+    color:var(--text-muted);
+    font-size:13px;
+  }
+  .auth-box input{
+    width:100%;
+    background:var(--bg-void);
+    border:1px solid var(--border-dim);
+    color:var(--text-primary);
+    font-family:'Share Tech Mono',monospace;
+    font-size:18px;
+    letter-spacing:.2em;
+    text-align:center;
+    padding:10px;
+    border-radius:3px;
+    margin-bottom:12px;
+  }
+  .auth-box input:focus{outline:2px solid var(--matrix);outline-offset:1px;}
+  .auth-box button{
+    width:100%;
+    background:var(--matrix-dim);
+    border:none;
+    color:#04140b;
+    font-family:'Rajdhani',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    padding:10px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  .auth-box button:hover{filter:brightness(1.2);}
+  .auth-box .err{
+    min-height:16px;
+    color:var(--crimson);
+    font-size:12px;
+    margin-top:10px;
+  }
+  .auth-box.shake{animation:shake .3s;}
+  @keyframes shake{
+    25%{transform:translateX(-6px);}
+    75%{transform:translateX(6px);}
+  }
 </style>
 </head>
 <body>
@@ -398,6 +462,17 @@
     <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"/>
   </filter>
 </svg>
+
+<div id="auth-gate" hidden>
+  <div class="auth-box">
+    <p dir="auto">برای ورود و پخش موسیقی، رمز رو وارد کن</p>
+    <form id="auth-form" autocomplete="off">
+      <input type="password" id="auth-password" inputmode="numeric" aria-label="رمز عبور" autofocus>
+      <button type="submit">ورود</button>
+      <div class="err" id="auth-err"></div>
+    </form>
+  </div>
+</div>
 
 <div class="wrap">
   <canvas id="rain" aria-hidden="true"></canvas>
@@ -416,7 +491,7 @@
     </div>
   </header>
 
-  <audio id="bgm" src="theme.mp3" loop preload="auto"></audio>
+  <audio id="bgm" src="/api/audio" loop preload="none"></audio>
 
   <main>
     <section class="col" data-status="planned">
@@ -811,7 +886,12 @@
       label.textContent = 'پخش موسیقی';
       btn.setAttribute('aria-label','پخش موسیقی');
     });
+  }
 
+  function unlockBgm(){
+    var audio = document.getElementById('bgm');
+    var btn = document.getElementById('bgm-toggle');
+    if(!audio || !btn) return;
     audio.play().catch(function(){
       function onFirstInteraction(e){
         if(btn.contains(e.target)) return;
@@ -824,10 +904,61 @@
     });
   }
 
+  function wireAuthGate(){
+    var gate = document.getElementById('auth-gate');
+    var form = document.getElementById('auth-form');
+    var input = document.getElementById('auth-password');
+    var err = document.getElementById('auth-err');
+    var box = gate.querySelector('.auth-box');
+    var audio = document.getElementById('bgm');
+    if(!gate || !form) return;
+
+    function grantAccess(){
+      gate.hidden = true;
+      unlockBgm();
+    }
+
+    fetch('/api/audio', {method:'HEAD', credentials:'same-origin'}).then(function(res){
+      if(res.ok){
+        grantAccess();
+      } else {
+        gate.hidden = false;
+      }
+    }).catch(function(){
+      gate.hidden = false;
+    });
+
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      err.textContent = '';
+      fetch('/api/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({password: input.value})
+      }).then(function(res){
+        if(res.ok){
+          audio.load();
+          grantAccess();
+        } else {
+          err.textContent = 'رمز اشتباهه';
+          input.value = '';
+          input.focus();
+          box.classList.remove('shake');
+          void box.offsetWidth;
+          box.classList.add('shake');
+        }
+      }).catch(function(){
+        err.textContent = 'خطا در اتصال';
+      });
+    });
+  }
+
   render();
   wireColumns();
   wireAddForms();
   wireBgm();
+  wireAuthGate();
   initRain();
 })();
 </script>
