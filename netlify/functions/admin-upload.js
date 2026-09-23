@@ -6,14 +6,33 @@ export default async (req) => {
     return new Response("Forbidden", { status: 403 });
   }
 
+  const url = new URL(req.url);
   const store = getStore("protected-media");
-  const buf = await req.arrayBuffer();
-  await store.set("theme.mp3", buf);
 
-  return new Response(JSON.stringify({ ok: true, bytes: buf.byteLength }), {
+  if (url.pathname.endsWith("/manifest")) {
+    const manifest = await req.json();
+    await store.setJSON("theme-manifest", manifest);
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const part = url.searchParams.get("part");
+  if (part === null) {
+    return new Response(JSON.stringify({ ok: false, error: "missing part" }), {
+      status: 400,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  const buf = await req.arrayBuffer();
+  await store.set(`theme-part-${part}`, buf);
+
+  return new Response(JSON.stringify({ ok: true, part, bytes: buf.byteLength }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });
 };
 
-export const config = { path: "/api/admin-upload" };
+export const config = { path: ["/api/admin-upload", "/api/admin-upload/manifest"] };

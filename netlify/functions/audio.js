@@ -34,13 +34,29 @@ export default async (req) => {
   }
 
   const store = getStore("protected-media");
-  const blob = await store.get("theme.mp3", { type: "arrayBuffer" });
+  const manifest = await store.get("theme-manifest", { type: "json" });
 
-  if (!blob) {
+  if (!manifest || !manifest.parts) {
     return new Response("Not found", { status: 404 });
   }
 
-  return new Response(blob, {
+  const buffers = [];
+  for (let i = 0; i < manifest.parts; i++) {
+    const part = await store.get(`theme-part-${i}`, { type: "arrayBuffer" });
+    if (!part) {
+      return new Response("Not found", { status: 404 });
+    }
+    buffers.push(new Uint8Array(part));
+  }
+
+  const combined = new Uint8Array(manifest.totalBytes);
+  let offset = 0;
+  for (const buf of buffers) {
+    combined.set(buf, offset);
+    offset += buf.byteLength;
+  }
+
+  return new Response(combined, {
     status: 200,
     headers: {
       "content-type": "audio/mpeg",
