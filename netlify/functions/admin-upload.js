@@ -1,9 +1,19 @@
 import { getStore } from "@netlify/blobs";
 
+const CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "x-admin-secret, content-type",
+  "access-control-allow-methods": "POST, OPTIONS",
+};
+
 export default async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
   const adminSecret = Netlify.env.get("ADMIN_SECRET");
   if (!adminSecret || req.headers.get("x-admin-secret") !== adminSecret) {
-    return new Response("Forbidden", { status: 403 });
+    return new Response("Forbidden", { status: 403, headers: CORS_HEADERS });
   }
 
   const url = new URL(req.url);
@@ -14,7 +24,7 @@ export default async (req) => {
     await store.setJSON("theme-manifest", manifest);
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...CORS_HEADERS },
     });
   }
 
@@ -22,7 +32,7 @@ export default async (req) => {
   if (part === null) {
     return new Response(JSON.stringify({ ok: false, error: "missing part" }), {
       status: 400,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...CORS_HEADERS },
     });
   }
 
@@ -31,7 +41,7 @@ export default async (req) => {
 
   return new Response(JSON.stringify({ ok: true, part, bytes: buf.byteLength }), {
     status: 200,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...CORS_HEADERS },
   });
 };
 
