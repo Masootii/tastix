@@ -32,7 +32,7 @@ export default async (req) => {
     });
   }
 
-  const expires = Date.now() + 1000 * 60 * 60 * 24 * 30;
+  const expires = Date.now() + 1000 * 60 * 60 * 2;
   const sig = crypto.createHmac("sha256", authSecret).update(String(expires)).digest("hex");
   const token = `${expires}.${sig}`;
 
@@ -40,7 +40,7 @@ export default async (req) => {
     status: 200,
     headers: {
       "content-type": "application/json",
-      "set-cookie": `tastix_auth=${token}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax`,
+      "set-cookie": `tastix_auth=${token}; Path=/; HttpOnly; Secure; SameSite=Lax`,
     },
   });
 };

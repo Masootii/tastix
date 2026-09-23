@@ -918,16 +918,6 @@
       unlockBgm();
     }
 
-    fetch('/api/audio', {method:'HEAD', credentials:'same-origin'}).then(function(res){
-      if(res.ok){
-        grantAccess();
-      } else {
-        gate.hidden = false;
-      }
-    }).catch(function(){
-      gate.hidden = false;
-    });
-
     form.addEventListener('submit', function(e){
       e.preventDefault();
       err.textContent = '';
