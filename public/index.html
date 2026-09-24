@@ -1110,7 +1110,8 @@
     bad_request: 'درخواست نامعتبر',
     invalid_token: 'لینک بازیابی نامعتبره یا منقضی شده؛ دوباره درخواست بده',
     mail_not_configured: 'ارسال ایمیل هنوز راه‌اندازی نشده',
-    mail_failed: 'ارسال ایمیل ناموفق بود، کمی بعد دوباره تلاش کن'
+    mail_failed: 'ارسال ایمیل ناموفق بود، کمی بعد دوباره تلاش کن',
+    no_account: 'با این ایمیل حسابی وجود نداره'
   };
 
   var resetToken = null;
@@ -1297,7 +1298,7 @@
             return;
           }
           if(current === 'forgot'){
-            setMessage('اگه حسابی با این ایمیل باشه، لینک بازیابی فرستاده شد.', true);
+            setMessage('لینک بازیابی به ایمیلت فرستاده شد.', true);
             return;
           }
           if(current === 'signup') clearLegacyTasks();

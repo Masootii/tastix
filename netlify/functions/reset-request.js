@@ -47,10 +47,10 @@ export default async (req, context) => {
   await recordAttempt(emailThrottle, MAX_PER_EMAIL);
   if (ipThrottle) await recordAttempt(ipThrottle, MAX_PER_IP);
 
-  // Same response whether or not the account exists, so this can't be used
-  // to discover who has signed up.
+  // Signup already reveals taken emails, so saying "no account" here leaks
+  // nothing new; the throttle above still limits probing.
   const user = await users().get(key, { type: "json" });
-  if (!user) return json({ ok: true });
+  if (!user) return json({ ok: false, error: "no_account" }, 404);
 
   const token = crypto.randomBytes(32).toString("base64url");
   await resets().setJSON(resetKey(token), { emailKey: key, expires: Date.now() + TOKEN_TTL_MS });
