@@ -1186,6 +1186,34 @@
     var emailInput = document.getElementById('auth-email');
     var passInput = document.getElementById('auth-password');
     var submit = document.getElementById('auth-submit');
+
+    // Browser validation bubbles follow the OS language; show Persian ones instead.
+    function faDigits(n){ return String(n).replace(/[0-9]/g, function(d){ return '۰۱۲۳۴۵۶۷۸۹'[d]; }); }
+    function shortPassMessage(input){
+      return 'رمز باید حداقل ' + faDigits(input.minLength) + ' کاراکتر باشه (الان ' + faDigits(input.value.length) + ' کاراکتره)';
+    }
+    function localizeValidity(input){
+      input.addEventListener('invalid', function(){
+        var v = input.validity, msg = '';
+        if(v.valueMissing) msg = input === emailInput ? 'ایمیلت رو وارد کن' : 'رمز رو وارد کن';
+        else if(v.typeMismatch) msg = 'ایمیل معتبر نیست؛ مثلاً name@gmail.com';
+        else if(v.tooShort) msg = shortPassMessage(input);
+        if(msg) input.setCustomValidity(msg);
+      });
+      input.addEventListener('input', function(){ input.setCustomValidity(''); });
+    }
+    localizeValidity(emailInput);
+    localizeValidity(passInput);
+    // Clear stale messages before each validation run (fires before submit, also on Enter).
+    submit.addEventListener('click', function(){
+      emailInput.setCustomValidity('');
+      passInput.setCustomValidity('');
+      // tooShort only fires after real typing, so check the length ourselves too.
+      var len = passInput.value.length;
+      if(passInput.required && passInput.minLength > 0 && len > 0 && len < passInput.minLength){
+        passInput.setCustomValidity(shortPassMessage(passInput));
+      }
+    });
     var title = document.getElementById('auth-title');
     var hint = document.getElementById('auth-hint');
     var switchBtn = document.getElementById('auth-switch');
