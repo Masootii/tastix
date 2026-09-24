@@ -93,14 +93,13 @@
     text-shadow:0 0 6px rgba(61,255,160,.6),0 0 16px rgba(61,255,160,.35);
     animation:flicker 6s infinite steps(30);
   }
-  .brand p .lang-word{
-    display:inline-block;
-    transition:opacity .25s ease;
+  .brand p .lang-word{display:inline-block;}
+  .brand p .lang-word.scrambling{
+    color:#c8ffe0;
+    text-shadow:0 0 8px rgba(61,255,160,.9),0 0 20px rgba(61,255,160,.6);
   }
-  .brand p .lang-word.swap{opacity:0;}
   @media (prefers-reduced-motion: reduce){
     .brand p{animation:none;}
-    .brand p .lang-word{transition:none;}
   }
   .tally{
     display:flex;
@@ -868,18 +867,34 @@
     var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if(reduceMotion || !swappable.length) return;
 
+    var GLYPHS = '0101010101アカサタナハマヤラワ';
+    function scramble(span, target){
+      var frame = 0, total = 9;
+      span.classList.add('scrambling');
+      var timer = setInterval(function(){
+        frame++;
+        var reveal = Math.floor(target.length * frame / total);
+        var out = '';
+        for(var i = 0; i < target.length; i++){
+          out += i < reveal ? target[i] : GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+        }
+        span.textContent = out;
+        if(frame >= total){
+          clearInterval(timer);
+          span.textContent = target;
+          span.classList.remove('scrambling');
+        }
+      }, 40);
+    }
+
     var idx = 0;
     setInterval(function(){
       var span = swappable[idx % swappable.length];
       idx++;
-      span.classList.add('swap');
-      setTimeout(function(){
-        var nextLang = span.dataset.lang === 'fa' ? 'jp' : 'fa';
-        span.textContent = span.dataset[nextLang];
-        span.dataset.lang = nextLang;
-        span.classList.remove('swap');
-      }, 250);
-    }, 1400);
+      var nextLang = span.dataset.lang === 'fa' ? 'jp' : 'fa';
+      span.dataset.lang = nextLang;
+      scramble(span, span.dataset[nextLang]);
+    }, 600);
   }
 
   function initRain(){
