@@ -1,48 +1,28 @@
-import crypto from "node:crypto";
+import {
+  users, boards, json, readJson, sessionCookie, verifyPassword,
+  normalizeEmail, emailKey,
+} from "../lib/auth.js";
 
 export default async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
+  if (req.method !== "POST") return json({ ok: false }, 405);
+
+  const body = await readJson(req);
+  if (!body) return json({ ok: false, error: "bad_request" }, 400);
+
+  const email = normalizeEmail(body.email);
+  const password = typeof body.password === "string" ? body.password : "";
+
+  const user = email ? await users().get(emailKey(email), { type: "json" }) : null;
+  if (!user || !verifyPassword(password, user.password)) {
+    return json({ ok: false, error: "invalid_credentials" }, 401);
   }
 
-  let body;
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ ok: false, error: "bad request" }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    });
-  }
-
-  const sitePassword = Netlify.env.get("SITE_PASSWORD");
-  const authSecret = Netlify.env.get("AUTH_SECRET");
-
-  if (!sitePassword || !authSecret) {
-    return new Response(JSON.stringify({ ok: false, error: "server not configured" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
-  }
-
-  if (body.password !== sitePassword) {
-    return new Response(JSON.stringify({ ok: false }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
-  }
-
-  const expires = Date.now() + 1000 * 60 * 60 * 2;
-  const sig = crypto.createHmac("sha256", authSecret).update(String(expires)).digest("hex");
-  const token = `${expires}.${sig}`;
-
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: {
-      "content-type": "application/json",
-      "set-cookie": `tastix_auth=${token}; Path=/; HttpOnly; Secure; SameSite=Lax`,
-    },
-  });
+  const board = await boards().get(user.id, { type: "json" });
+  return json(
+    { ok: true, email: user.email, tasks: board?.tasks || [] },
+    200,
+    { "set-cookie": sessionCookie(user.id) },
+  );
 };
 
 export const config = { path: "/api/login" };

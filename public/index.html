@@ -423,6 +423,14 @@
     text-align:center;
     box-shadow:0 0 30px -6px rgba(61,255,160,.25);
   }
+  .auth-box h2{
+    margin:0 0 6px;
+    font-family:'Lalezar','Tahoma',sans-serif;
+    font-weight:400;
+    font-size:24px;
+    color:var(--matrix);
+    text-shadow:0 0 6px rgba(61,255,160,.6),0 0 16px rgba(61,255,160,.35);
+  }
   .auth-box p{
     margin:0 0 16px;
     color:var(--text-muted);
@@ -434,15 +442,37 @@
     border:1px solid var(--border-dim);
     color:var(--text-primary);
     font-family:'Share Tech Mono',monospace;
-    font-size:18px;
-    letter-spacing:.2em;
-    text-align:center;
+    font-size:15px;
     padding:10px;
     border-radius:3px;
-    margin-bottom:12px;
+    margin-bottom:10px;
+  }
+  .auth-box input::placeholder{color:var(--text-faint);}
+  .auth-box form button:disabled{opacity:.6;cursor:wait;}
+  .auth-switch{
+    margin-top:14px;
+    background:none;
+    border:none;
+    color:var(--text-muted);
+    font-family:'Rajdhani','Tahoma',sans-serif;
+    font-size:13px;
+    font-weight:500;
+    text-decoration:underline;
+    text-underline-offset:3px;
+    cursor:pointer;
+  }
+  .auth-switch:hover{color:var(--matrix);}
+  .user-email{
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px;
+    color:var(--text-muted);
+    max-width:200px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
   }
   .auth-box input:focus{outline:2px solid var(--matrix);outline-offset:1px;}
-  .auth-box button{
+  .auth-box form button{
     width:100%;
     background:var(--matrix-dim);
     border:none;
@@ -454,7 +484,7 @@
     border-radius:3px;
     cursor:pointer;
   }
-  .auth-box button:hover{filter:brightness(1.2);}
+  .auth-box form button:hover{filter:brightness(1.2);}
   .auth-box .err{
     min-height:16px;
     color:var(--crimson);
@@ -479,12 +509,15 @@
 
 <div id="auth-gate">
   <div class="auth-box">
-    <p dir="auto">برای شروع رمز عبور بزنید</p>
-    <form id="auth-form" autocomplete="off">
-      <input type="password" id="auth-password" inputmode="numeric" aria-label="رمز عبور" autofocus>
-      <button type="submit">ورود</button>
-      <div class="err" id="auth-err"></div>
+    <h2 id="auth-title">ورود</h2>
+    <p id="auth-hint">با ایمیل و رمز عبورت وارد شو</p>
+    <form id="auth-form">
+      <input type="email" id="auth-email" dir="ltr" autocomplete="email" placeholder="email@example.com" aria-label="ایمیل" required autofocus>
+      <input type="password" id="auth-password" dir="ltr" autocomplete="current-password" placeholder="••••••••" aria-label="رمز عبور" required>
+      <button type="submit" id="auth-submit">ورود</button>
+      <div class="err" id="auth-err" role="alert"></div>
     </form>
+    <button type="button" class="auth-switch" id="auth-switch">حساب نداری؟ ثبت‌نام کن</button>
   </div>
 </div>
 
@@ -498,6 +531,8 @@
     </div>
     <div class="header-controls">
       <div class="tally" id="tally"></div>
+      <span class="user-email" id="user-email" dir="ltr"></span>
+      <button class="bgm-toggle" id="logout-btn" type="button">خروج</button>
       <button class="bgm-toggle" id="bgm-toggle" type="button" aria-label="پخش موسیقی">
         <span class="note" aria-hidden="true">♪</span>
         <span id="bgm-label">پخش موسیقی</span>
@@ -557,33 +592,30 @@
     </section>
   </main>
 
-  <footer>SIGNAL STABLE — BOARD SYNCED LOCALLY</footer>
+  <footer>SIGNAL STABLE — BOARD SYNCED TO SERVER</footer>
 </div>
 
 <script>
 (function(){
   "use strict";
-  var STORAGE_KEY = 'task-matrix-state';
+  var LEGACY_STORAGE_KEY = 'task-matrix-state';
   var STATUSES = ['planned','doing','done'];
   var lastDragId = null;
 
-  var SEED = {tasks:[
-    {id:"t1",text:"طراحی تم دارک نئون",status:"planned"},
-    {id:"t2",text:"افزودن جلوه صوتی محیط (اختیاری)",status:"planned"},
-    {id:"t3",text:"پیاده‌سازی درگ‌اند‌دراپ بین ستون‌ها",status:"doing"},
-    {id:"t4",text:"راه‌اندازی ساختار پایه صفحه",status:"done"},
-    {id:"t5",text:"اتصال ذخیره‌سازی به localStorage",status:"done"}
-  ]};
+  var state = {tasks: []};
 
-  function loadState(){
+  function readLegacyTasks(){
     try{
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if(raw) return JSON.parse(raw);
+      var raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      var parsed = raw && JSON.parse(raw);
+      if(parsed && Array.isArray(parsed.tasks)) return parsed.tasks;
     }catch(e){}
-    return JSON.parse(JSON.stringify(SEED));
+    return [];
   }
 
-  var state = loadState();
+  function clearLegacyTasks(){
+    try{ localStorage.removeItem(LEGACY_STORAGE_KEY); }catch(e){}
+  }
 
   function uid(){
     return 't_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
@@ -831,10 +863,19 @@
     });
   }
 
+  var saveTimer = null;
   function persist(){
-    try{
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }catch(e){}
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){
+      fetch('/api/tasks', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({tasks: state.tasks})
+      }).then(function(res){
+        if(res.status === 401) showGate('نشستت تموم شده، دوباره وارد شو');
+      }).catch(function(){});
+    }, 400);
   }
 
   var TAGLINE_WORDS = [
@@ -978,42 +1019,102 @@
     });
   }
 
+  var AUTH_ERRORS = {
+    invalid_credentials: 'ایمیل یا رمز اشتباهه',
+    invalid_email: 'ایمیل معتبر نیست',
+    weak_password: 'رمز باید حداقل ۸ کاراکتر باشه',
+    email_taken: 'این ایمیل قبلاً ثبت‌نام کرده',
+    bad_request: 'درخواست نامعتبر'
+  };
+
+  function showGate(message){
+    var audio = document.getElementById('bgm');
+    audio.pause();
+    document.getElementById('auth-gate').hidden = false;
+    document.getElementById('auth-err').textContent = message || '';
+    document.getElementById('auth-password').value = '';
+    document.getElementById('auth-email').focus();
+  }
+
   function wireAuthGate(){
     var gate = document.getElementById('auth-gate');
     var form = document.getElementById('auth-form');
-    var input = document.getElementById('auth-password');
+    var emailInput = document.getElementById('auth-email');
+    var passInput = document.getElementById('auth-password');
+    var submit = document.getElementById('auth-submit');
+    var title = document.getElementById('auth-title');
+    var hint = document.getElementById('auth-hint');
+    var switchBtn = document.getElementById('auth-switch');
     var err = document.getElementById('auth-err');
     var box = gate.querySelector('.auth-box');
     var audio = document.getElementById('bgm');
-    if(!gate || !form) return;
+    var mode = 'login';
 
-    function grantAccess(){
-      gate.hidden = true;
-      unlockBgm();
+    function setMode(next){
+      mode = next;
+      var signup = mode === 'signup';
+      title.textContent = signup ? 'ثبت‌نام' : 'ورود';
+      hint.textContent = signup ? 'یه حساب بساز تا بوردت روی همه‌ی دستگاه‌ها باشه' : 'با ایمیل و رمز عبورت وارد شو';
+      submit.textContent = signup ? 'ساخت حساب' : 'ورود';
+      switchBtn.textContent = signup ? 'حساب داری؟ وارد شو' : 'حساب نداری؟ ثبت‌نام کن';
+      passInput.autocomplete = signup ? 'new-password' : 'current-password';
+      passInput.minLength = signup ? 8 : 0;
+      err.textContent = '';
     }
+
+    function fail(message){
+      err.textContent = message;
+      box.classList.remove('shake');
+      void box.offsetWidth;
+      box.classList.add('shake');
+    }
+
+    switchBtn.addEventListener('click', function(){
+      setMode(mode === 'login' ? 'signup' : 'login');
+      emailInput.focus();
+    });
+
+    document.getElementById('logout-btn').addEventListener('click', function(){
+      fetch('/api/logout', {method: 'POST', credentials: 'same-origin'}).catch(function(){});
+      state.tasks = [];
+      render();
+      document.getElementById('user-email').textContent = '';
+      setMode('login');
+      showGate();
+    });
 
     form.addEventListener('submit', function(e){
       e.preventDefault();
       err.textContent = '';
-      fetch('/api/login', {
+      var signup = mode === 'signup';
+      var payload = {email: emailInput.value, password: passInput.value};
+      if(signup) payload.tasks = readLegacyTasks();
+      submit.disabled = true;
+      fetch(signup ? '/api/signup' : '/api/login', {
         method: 'POST',
         credentials: 'same-origin',
         headers: {'content-type': 'application/json'},
-        body: JSON.stringify({password: input.value})
+        body: JSON.stringify(payload)
       }).then(function(res){
-        if(res.ok){
+        return res.json().catch(function(){ return {}; }).then(function(data){
+          if(!res.ok || !data.ok){
+            fail(AUTH_ERRORS[data.error] || 'خطای سرور، دوباره تلاش کن');
+            if(!signup) passInput.value = '';
+            return;
+          }
+          if(signup) clearLegacyTasks();
+          state.tasks = data.tasks || [];
+          render();
+          document.getElementById('user-email').textContent = data.email;
+          passInput.value = '';
+          gate.hidden = true;
           audio.load();
-          grantAccess();
-        } else {
-          err.textContent = 'رمز اشتباهه';
-          input.value = '';
-          input.focus();
-          box.classList.remove('shake');
-          void box.offsetWidth;
-          box.classList.add('shake');
-        }
+          unlockBgm();
+        });
       }).catch(function(){
-        err.textContent = 'خطا در اتصال';
+        fail('خطا در اتصال');
+      }).then(function(){
+        submit.disabled = false;
       });
     });
   }
