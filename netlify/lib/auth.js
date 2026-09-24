@@ -7,8 +7,10 @@ const SESSION_MS = 1000 * 60 * 60 * 2;
 export const STATUSES = ["planned", "doing", "done"];
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const users = () => getStore("users");
-export const boards = () => getStore("boards");
+// Default Blobs reads are eventually consistent (up to ~60s stale), which
+// would show old boards and let duplicate signups slip through.
+export const users = () => getStore({ name: "users", consistency: "strong" });
+export const boards = () => getStore({ name: "boards", consistency: "strong" });
 
 export function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {

@@ -400,6 +400,8 @@
     font-size:11px;
     letter-spacing:.06em;
   }
+  footer[data-status="saving"]{color:var(--text-muted);}
+  footer[data-status="failed"]{color:var(--crimson);text-shadow:0 0 8px rgba(255,69,104,.5);}
 
   :focus-visible{outline:2px solid var(--matrix);outline-offset:2px;}
 
@@ -628,7 +630,7 @@
     </section>
   </main>
 
-  <footer>SIGNAL STABLE — BOARD SYNCED TO SERVER</footer>
+  <footer id="sync-status" data-status="saved" role="status">SIGNAL STABLE — BOARD SYNCED TO SERVER</footer>
 </div>
 
 <script>
@@ -899,20 +901,46 @@
     });
   }
 
-  var saveTimer = null;
-  function persist(){
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(function(){
-      fetch('/api/tasks', {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: {'content-type': 'application/json'},
-        body: JSON.stringify({tasks: state.tasks})
-      }).then(function(res){
-        if(res.status === 401) showGate('نشستت تموم شده، دوباره وارد شو');
-      }).catch(function(){});
-    }, 400);
+  var SYNC_LABELS = {
+    saving: 'SAVING…',
+    saved: 'SIGNAL STABLE — BOARD SYNCED TO SERVER',
+    failed: 'SYNC FAILED — CHANGES NOT SAVED'
+  };
+  function setSyncStatus(status){
+    var el = document.getElementById('sync-status');
+    el.textContent = SYNC_LABELS[status];
+    el.dataset.status = status;
   }
+
+  var saveTimer = null;
+  function saveNow(keepalive){
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    fetch('/api/tasks', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      keepalive: keepalive === true,
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({tasks: state.tasks})
+    }).then(function(res){
+      if(res.status === 401){
+        setSyncStatus('failed');
+        showGate('نشستت تموم شده، دوباره وارد شو');
+      } else {
+        setSyncStatus(res.ok ? 'saved' : 'failed');
+      }
+    }).catch(function(){
+      setSyncStatus('failed');
+    });
+  }
+  function persist(){
+    setSyncStatus('saving');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 400);
+  }
+  window.addEventListener('pagehide', function(){
+    if(saveTimer) saveNow(true);
+  });
 
   var TAGLINE_WORDS = [
     {fa:'بورد', jp:'ボード'},
@@ -1156,6 +1184,7 @@
     });
 
     document.getElementById('logout-btn').addEventListener('click', function(){
+      if(saveTimer) saveNow();
       fetch('/api/logout', {method: 'POST', credentials: 'same-origin'}).catch(function(){});
       state.tasks = [];
       render();
