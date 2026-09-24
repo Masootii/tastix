@@ -17,6 +17,19 @@ export function json(data, status = 200, headers = {}) {
   });
 }
 
+export function redirect(location, cookies = []) {
+  const headers = new Headers({ location });
+  for (const cookie of cookies) headers.append("set-cookie", cookie);
+  return new Response(null, { status: 302, headers });
+}
+
+export function readCookie(req, name) {
+  const match = (req.headers.get("cookie") || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]+)"));
+  return match ? match[1] : null;
+}
+
+export const userIndexKey = (userId) => `user-${userId}`;
+
 export async function readJson(req) {
   try {
     return await req.json();
@@ -39,9 +52,9 @@ export function sessionCookie(userId) {
 export const clearedCookie = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 
 export function currentUserId(req) {
-  const match = (req.headers.get("cookie") || "").match(/(?:^|;\s*)tastix_auth=([^;]+)/);
-  if (!match) return null;
-  const parts = match[1].split(".");
+  const token = readCookie(req, COOKIE);
+  if (!token) return null;
+  const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [userId, expires, sig] = parts;
   if (!(Number(expires) > Date.now())) return null;

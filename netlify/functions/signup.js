@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import {
   users, boards, json, readJson, sessionCookie, hashPassword,
-  cleanTasks, normalizeEmail, emailKey, EMAIL_RE,
+  cleanTasks, normalizeEmail, emailKey, userIndexKey, EMAIL_RE,
 } from "../lib/auth.js";
 
 export default async (req) => {
@@ -32,6 +32,7 @@ export default async (req) => {
     password: hashPassword(password),
     createdAt: new Date().toISOString(),
   });
+  await users().setJSON(userIndexKey(id), { email });
 
   const tasks = cleanTasks(body.tasks) || [];
   await boards().setJSON(id, { tasks });

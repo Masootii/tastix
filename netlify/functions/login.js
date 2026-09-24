@@ -13,7 +13,7 @@ export default async (req) => {
   const password = typeof body.password === "string" ? body.password : "";
 
   const user = email ? await users().get(emailKey(email), { type: "json" }) : null;
-  if (!user || !verifyPassword(password, user.password)) {
+  if (!user || !user.password || !verifyPassword(password, user.password)) {
     return json({ ok: false, error: "invalid_credentials" }, 401);
   }
 
