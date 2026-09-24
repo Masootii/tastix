@@ -11,6 +11,37 @@ export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // would show old boards and let duplicate signups slip through.
 export const users = () => getStore({ name: "users", consistency: "strong" });
 export const boards = () => getStore({ name: "boards", consistency: "strong" });
+export const throttles = () => getStore({ name: "throttle", consistency: "strong" });
+export const resets = () => getStore({ name: "resets", consistency: "strong" });
+
+export function resetKey(token) {
+  return "reset-" + crypto.createHash("sha256").update(token).digest("hex");
+}
+
+const THROTTLE_WINDOW_MS = 15 * 60 * 1000;
+
+export async function lockedMinutes(key) {
+  const record = await throttles().get(key, { type: "json" });
+  const remaining = (record?.lockedUntil || 0) - Date.now();
+  return remaining > 0 ? Math.ceil(remaining / 60000) : 0;
+}
+
+export async function recordAttempt(key, maxAttempts) {
+  const now = Date.now();
+  const record = await throttles().get(key, { type: "json" });
+  const recent = record?.since && now - record.since < THROTTLE_WINDOW_MS;
+  const count = (recent ? record.count : 0) + 1;
+  await throttles().setJSON(
+    key,
+    count >= maxAttempts
+      ? { lockedUntil: now + THROTTLE_WINDOW_MS }
+      : { count, since: recent ? record.since : now },
+  );
+}
+
+export async function clearAttempts(key) {
+  await throttles().delete(key);
+}
 
 export function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {

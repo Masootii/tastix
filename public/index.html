@@ -483,7 +483,8 @@
   }
   .auth-box form button:disabled{opacity:.6;cursor:wait;}
   .auth-switch{
-    margin-top:14px;
+    display:block;
+    margin:14px auto 0;
     background:none;
     border:none;
     color:var(--text-muted);
@@ -495,6 +496,20 @@
     cursor:pointer;
   }
   .auth-switch:hover{color:var(--matrix);}
+  .auth-switch[hidden]{display:none;}
+  #auth-forgot:not([hidden]) + .auth-switch{margin-top:6px;}
+  .auth-box .err.ok{color:var(--matrix);}
+  .auth-note{
+    margin:14px 0 0;
+    padding:10px 12px;
+    border:1px dashed var(--border-dim);
+    border-radius:3px;
+    color:var(--text-muted);
+    font-size:12px;
+    line-height:1.7;
+    text-align:right;
+  }
+  .auth-note b{color:#ffd166;font-weight:600;}
   .user-email{
     font-family:'Share Tech Mono',monospace;
     font-size:12px;
@@ -541,20 +556,24 @@
 </svg>
 
 <div id="auth-gate">
-  <div class="auth-box">
+  <div class="auth-box" dir="rtl">
     <h2 id="auth-title">ورود</h2>
     <p id="auth-hint">با گوگل یا ایمیلت وارد شو</p>
+    <div id="auth-social">
     <a class="google-btn" href="/api/auth/google">
       <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
       <span>ورود با گوگل</span>
     </a>
     <div class="auth-divider"><span>یا با ایمیل</span></div>
+    </div>
     <form id="auth-form">
       <input type="email" id="auth-email" dir="ltr" autocomplete="email" placeholder="email@example.com" aria-label="ایمیل" required autofocus>
       <input type="password" id="auth-password" dir="ltr" autocomplete="current-password" placeholder="••••••••" aria-label="رمز عبور" required>
       <button type="submit" id="auth-submit">ورود</button>
       <div class="err" id="auth-err" role="alert"></div>
     </form>
+    <p class="auth-note" id="auth-note" hidden><b>توجه:</b> ایمیل بازیابی ممکنه توی پوشه‌ی اسپم (Spam یا Junk) بره. اگه تا چند دقیقه به صندوق ورودی نرسید، اونجا رو هم نگاه کن.</p>
+    <button type="button" class="auth-switch" id="auth-forgot">رمزت رو فراموش کردی؟</button>
     <button type="button" class="auth-switch" id="auth-switch">حساب نداری؟ ثبت‌نام کن</button>
   </div>
 </div>
@@ -1088,8 +1107,14 @@
     invalid_email: 'ایمیل معتبر نیست',
     weak_password: 'رمز باید حداقل ۸ کاراکتر باشه',
     email_taken: 'این ایمیل قبلاً ثبت‌نام کرده، وارد شو',
-    bad_request: 'درخواست نامعتبر'
+    bad_request: 'درخواست نامعتبر',
+    invalid_token: 'لینک بازیابی نامعتبره یا منقضی شده؛ دوباره درخواست بده',
+    mail_not_configured: 'ارسال ایمیل هنوز راه‌اندازی نشده',
+    mail_failed: 'ارسال ایمیل ناموفق بود، کمی بعد دوباره تلاش کن'
   };
+
+  var resetToken = null;
+  var setGateMode = function(){};
 
   var GOOGLE_ERRORS = {
     'google': 'ورود با گوگل ناموفق بود، دوباره تلاش کن',
@@ -1112,6 +1137,12 @@
     if(!hash) return;
     history.replaceState(null, '', location.pathname + location.search);
 
+    if(hash.indexOf('#reset=') === 0){
+      resetToken = hash.slice('#reset='.length);
+      setGateMode('reset');
+      document.getElementById('auth-password').focus();
+      return;
+    }
     if(hash.indexOf('#auth-error=') === 0){
       var reason = hash.slice('#auth-error='.length);
       showGate(reason in GOOGLE_ERRORS ? GOOGLE_ERRORS[reason] : GOOGLE_ERRORS.google);
@@ -1141,7 +1172,9 @@
     var audio = document.getElementById('bgm');
     audio.pause();
     document.getElementById('auth-gate').hidden = false;
-    document.getElementById('auth-err').textContent = message || '';
+    var err = document.getElementById('auth-err');
+    err.textContent = message || '';
+    err.classList.remove('ok');
     document.getElementById('auth-password').value = '';
     document.getElementById('auth-email').focus();
   }
@@ -1155,31 +1188,65 @@
     var title = document.getElementById('auth-title');
     var hint = document.getElementById('auth-hint');
     var switchBtn = document.getElementById('auth-switch');
+    var forgotBtn = document.getElementById('auth-forgot');
+    var social = document.getElementById('auth-social');
+    var note = document.getElementById('auth-note');
     var err = document.getElementById('auth-err');
     var box = gate.querySelector('.auth-box');
     var mode = 'login';
 
+    var MODES = {
+      login: {title: 'ورود', hint: 'با گوگل یا ایمیلت وارد شو', submit: 'ورود', next: 'signup',
+        switchText: 'حساب نداری؟ ثبت‌نام کن', email: true, pass: 'current-password', social: true, forgot: true},
+      signup: {title: 'ثبت‌نام', hint: 'یه حساب بساز تا بوردت روی همه‌ی دستگاه‌ها باشه', submit: 'ساخت حساب', next: 'login',
+        switchText: 'حساب داری؟ وارد شو', email: true, pass: 'new-password', social: true},
+      forgot: {title: 'بازیابی رمز', hint: 'ایمیلت رو بزن تا لینک ساختن رمز جدید برات بفرستیم', submit: 'ارسال لینک', next: 'login',
+        switchText: 'برگشت به ورود', email: true, pass: null, note: true},
+      reset: {title: 'رمز جدید', hint: 'یه رمز جدید با حداقل ۸ کاراکتر انتخاب کن', submit: 'ذخیره و ورود', next: 'login',
+        switchText: 'برگشت به ورود', email: false, pass: 'new-password'}
+    };
+
     function setMode(next){
       mode = next;
-      var signup = mode === 'signup';
-      title.textContent = signup ? 'ثبت‌نام' : 'ورود';
-      hint.textContent = signup ? 'یه حساب بساز تا بوردت روی همه‌ی دستگاه‌ها باشه' : 'با گوگل یا ایمیلت وارد شو';
-      submit.textContent = signup ? 'ساخت حساب' : 'ورود';
-      switchBtn.textContent = signup ? 'حساب داری؟ وارد شو' : 'حساب نداری؟ ثبت‌نام کن';
-      passInput.autocomplete = signup ? 'new-password' : 'current-password';
-      passInput.minLength = signup ? 8 : 0;
-      err.textContent = '';
+      var m = MODES[next];
+      title.textContent = m.title;
+      hint.textContent = m.hint;
+      submit.textContent = m.submit;
+      switchBtn.textContent = m.switchText;
+      emailInput.hidden = !m.email;
+      emailInput.required = m.email;
+      passInput.hidden = !m.pass;
+      passInput.required = !!m.pass;
+      if(m.pass) passInput.autocomplete = m.pass;
+      passInput.minLength = m.pass === 'new-password' ? 8 : 0;
+      passInput.value = '';
+      social.hidden = !m.social;
+      forgotBtn.hidden = !m.forgot;
+      note.hidden = !m.note;
+      setMessage('');
+    }
+    setGateMode = setMode;
+
+    function setMessage(text, ok){
+      err.textContent = text;
+      err.classList.toggle('ok', !!ok);
     }
 
     function fail(message){
-      err.textContent = message;
+      setMessage(message);
       box.classList.remove('shake');
       void box.offsetWidth;
       box.classList.add('shake');
     }
 
     switchBtn.addEventListener('click', function(){
-      setMode(mode === 'login' ? 'signup' : 'login');
+      resetToken = null;
+      setMode(MODES[mode].next);
+      emailInput.focus();
+    });
+
+    forgotBtn.addEventListener('click', function(){
+      setMode('forgot');
       emailInput.focus();
     });
 
@@ -1193,14 +1260,23 @@
       showGate();
     });
 
+    var ENDPOINTS = {login: '/api/login', signup: '/api/signup', forgot: '/api/reset-request', reset: '/api/reset-confirm'};
+
     form.addEventListener('submit', function(e){
       e.preventDefault();
-      err.textContent = '';
-      var signup = mode === 'signup';
-      var payload = {email: emailInput.value, password: passInput.value};
-      if(signup) payload.tasks = readLegacyTasks();
+      setMessage('');
+      var current = mode;
+      var payload;
+      if(current === 'reset'){
+        payload = {token: resetToken, password: passInput.value};
+      } else if(current === 'forgot'){
+        payload = {email: emailInput.value};
+      } else {
+        payload = {email: emailInput.value, password: passInput.value};
+        if(current === 'signup') payload.tasks = readLegacyTasks();
+      }
       submit.disabled = true;
-      fetch(signup ? '/api/signup' : '/api/login', {
+      fetch(ENDPOINTS[current], {
         method: 'POST',
         credentials: 'same-origin',
         headers: {'content-type': 'application/json'},
@@ -1208,12 +1284,26 @@
       }).then(function(res){
         return res.json().catch(function(){ return {}; }).then(function(data){
           if(!res.ok || !data.ok){
-            fail(AUTH_ERRORS[data.error] || 'خطای سرور، دوباره تلاش کن');
-            if(!signup) passInput.value = '';
+            if(data.error === 'invalid_token'){
+              resetToken = null;
+              setMode('forgot');
+            }
+            if(current === 'login') passInput.value = '';
+            if(data.error === 'too_many_attempts'){
+              fail('تعداد تلاش‌ها زیاد بود؛ ' + data.retryAfter + ' دقیقه‌ی دیگه دوباره امتحان کن');
+            } else {
+              fail(AUTH_ERRORS[data.error] || 'خطای سرور، دوباره تلاش کن');
+            }
             return;
           }
-          if(signup) clearLegacyTasks();
+          if(current === 'forgot'){
+            setMessage('اگه حسابی با این ایمیل باشه، لینک بازیابی فرستاده شد.', true);
+            return;
+          }
+          if(current === 'signup') clearLegacyTasks();
+          resetToken = null;
           enterBoard(data.email, data.tasks || []);
+          setMode('login');
         });
       }).catch(function(){
         fail('خطا در اتصال');
